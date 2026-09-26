@@ -113,6 +113,27 @@
         "domain",
         "storage"
       ]
+    },
+    {
+      "id": "run-cleanup",
+      "name": "Abort or complete a run and release the vessel after cleaning",
+      "entry": "POST /v1/runs/{id}/abort",
+      "steps": [
+        "abort a reserved run and verify the vessel is immediately released",
+        "abort a fermenting run and verify the vessel enters cleaning with the run link retained",
+        "complete a run and verify the vessel enters cleaning with the run link retained",
+        "confirm cleaning completion and verify the vessel is released",
+        "reopen the persisted snapshot and verify list and detail reads match"
+      ],
+      "success": "returns an aborted or completed run and a vessel that is released or cleaning with its run link",
+      "failure": "returns stable state or revision conflicts without changing either side",
+      "verification": "the check issues real HTTP requests, verifies rejection and recovery behavior, and reopens the store",
+      "module_ids": [
+        "httpapi",
+        "service",
+        "domain",
+        "storage"
+      ]
     }
   ]
 }

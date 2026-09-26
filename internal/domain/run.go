@@ -165,8 +165,5 @@ func (r *FermentationRun) Abort(now time.Time) error {
 }
 
 func (r FermentationRun) HadStarted() bool {
-	if r.StartedAt != nil {
-		return true
-	}
-	return r.VesselID != nil
+	return r.StartedAt != nil
 }

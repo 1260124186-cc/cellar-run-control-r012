@@ -115,11 +115,14 @@ Run each production workflow check separately:
 go run ./cmd/fermentctl check formula-approval
 go run ./cmd/fermentctl check vessel-run-lifecycle
 go run ./cmd/fermentctl check observations-completion
+go run ./cmd/fermentctl check run-cleanup
 ```
 
 Each check creates a temporary snapshot directory, starts the real HTTP
 handler on a loopback listener, issues JSON requests, verifies success and
-failure behavior, and removes its temporary data.
+failure behavior, and removes its temporary data. The `run-cleanup` check
+additionally reopens the persisted snapshot to confirm that run and vessel
+list and detail state after a restart match the last successful writes.
 
 ## Persistence And Recovery
 

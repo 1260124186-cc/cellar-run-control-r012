@@ -80,9 +80,6 @@ func (s *Service) CompleteRun(
 			return domain.NewError(domain.CodeFormulaNotFound, "attached formula was not found")
 		}
 		completedAt := s.clock.Now()
-		if err := run.Complete(formula.TargetOriginalGravity, completedAt); err != nil {
-			return err
-		}
 		if run.VesselID == nil {
 			return domain.NewError(domain.CodeRunState, "run has no vessel")
 		}
@@ -90,7 +87,10 @@ func (s *Service) CompleteRun(
 		if !ok {
 			return domain.NewError(domain.CodeVesselNotFound, "vessel was not found")
 		}
-		if err := vessel.ReleaseReservation(run.ID, completedAt); err != nil {
+		if err := run.Complete(formula.TargetOriginalGravity, completedAt); err != nil {
+			return err
+		}
+		if err := vessel.StartCleaning(run.ID, completedAt); err != nil {
 			return err
 		}
 		snapshot.Runs[id] = run.Clone()

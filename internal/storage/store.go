@@ -118,7 +118,92 @@ func validateIndexes(value domain.Snapshot) error {
 		}
 		expectedRuns[run.Code] = id
 	}
-	return compareIndexes("run code", value.RunIndex, expectedRuns)
+	if err := compareIndexes("run code", value.RunIndex, expectedRuns); err != nil {
+		return err
+	}
+
+	return validateRunVesselLinks(value)
+}
+
+func validateRunVesselLinks(value domain.Snapshot) error {
+	for vesselID, vessel := range value.Vessels {
+		switch vessel.State {
+		case domain.VesselAvailable, domain.VesselRetired:
+			if vessel.ActiveRunID != nil {
+				return fmt.Errorf("vessel %s is %s but still names an active run",
+					vesselID, vessel.State)
+			}
+		case domain.VesselReserved, domain.VesselInUse, domain.VesselCleaning:
+			if vessel.ActiveRunID == nil {
+				return fmt.Errorf("vessel %s is %s without an associated run",
+					vesselID, vessel.State)
+			}
+			run, ok := value.Runs[*vessel.ActiveRunID]
+			if !ok {
+				return fmt.Errorf("vessel %s references a missing run", vesselID)
+			}
+			if run.VesselID == nil || *run.VesselID != vesselID {
+				return fmt.Errorf("vessel %s and run %s disagree on their association",
+					vesselID, run.ID)
+			}
+			switch vessel.State {
+			case domain.VesselReserved:
+				if run.State != domain.RunReserved {
+					return fmt.Errorf("reserved vessel %s belongs to run in state %s",
+						vesselID, run.State)
+				}
+			case domain.VesselInUse:
+				if run.State != domain.RunFermenting && run.State != domain.RunConditioning {
+					return fmt.Errorf("in-use vessel %s belongs to run in state %s",
+						vesselID, run.State)
+				}
+			case domain.VesselCleaning:
+				if run.State != domain.RunCompleted && run.State != domain.RunAborted {
+					return fmt.Errorf("cleaning vessel %s belongs to run in state %s",
+						vesselID, run.State)
+				}
+			}
+		default:
+			return fmt.Errorf("vessel %s has an unknown state %q", vesselID, vessel.State)
+		}
+	}
+
+	for runID, run := range value.Runs {
+		if run.VesselID == nil {
+			continue
+		}
+		vessel, ok := value.Vessels[*run.VesselID]
+		if !ok {
+			return fmt.Errorf("run %s references a missing vessel", runID)
+		}
+		switch run.State {
+		case domain.RunPlanned:
+			return fmt.Errorf("planned run %s must not name a vessel", runID)
+		case domain.RunReserved:
+			if vessel.State != domain.VesselReserved ||
+				vessel.ActiveRunID == nil || *vessel.ActiveRunID != runID {
+				return fmt.Errorf("reserved run %s is not backed by its vessel", runID)
+			}
+		case domain.RunFermenting, domain.RunConditioning:
+			if vessel.State != domain.VesselInUse ||
+				vessel.ActiveRunID == nil || *vessel.ActiveRunID != runID {
+				return fmt.Errorf("active run %s is not backed by its vessel", runID)
+			}
+		case domain.RunCompleted, domain.RunAborted:
+			// A finished run keeps a historical link. If the vessel still names
+			// this run it must be cleaning on its behalf; otherwise the vessel
+			// has already been released and may have been reused.
+			if vessel.ActiveRunID != nil && *vessel.ActiveRunID == runID {
+				if vessel.State != domain.VesselCleaning {
+					return fmt.Errorf("finished run %s is still the active run of vessel in state %s",
+						runID, vessel.State)
+				}
+			}
+		default:
+			return fmt.Errorf("run %s has an unknown state %q", runID, run.State)
+		}
+	}
+	return nil
 }
 
 func compareIndexes(label string, actual, expected map[string]string) error {

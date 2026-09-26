@@ -65,7 +65,6 @@ func (v *Vessel) StartCleaning(runID string, now time.Time) error {
 		return NewError(CodeVesselState, "vessel cannot enter cleaning for this run")
 	}
 	v.State = VesselCleaning
-	v.ActiveRunID = nil
 	stamp := now.UTC()
 	v.UpdatedAt = stamp
 	v.Version++
@@ -84,8 +83,8 @@ func (v *Vessel) FinishCleaning(now time.Time) error {
 }
 
 func (v *Vessel) ReleaseReservation(runID string, now time.Time) error {
-	if v.State != VesselReserved && v.State != VesselInUse {
-		return NewError(CodeVesselState, "vessel does not have a releasable run")
+	if v.State != VesselReserved {
+		return NewError(CodeVesselState, "vessel does not have a releasable reservation")
 	}
 	if v.ActiveRunID == nil || *v.ActiveRunID != runID {
 		return NewError(CodeVesselState, "vessel belongs to a different run")

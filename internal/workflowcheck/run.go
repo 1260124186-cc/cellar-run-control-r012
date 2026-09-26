@@ -24,24 +24,44 @@ func Run(name string) error {
 	}
 	app := service.New(store, clock.System{})
 	server := httptest.NewServer(httpapi.NewHandler(app))
-	defer server.Close()
 	api := newClient(server.URL)
 
 	switch name {
 	case "formula-approval":
-		if err := formulaApproval(api); err != nil {
-			return err
-		}
+		err = formulaApproval(api)
 	case "vessel-run-lifecycle":
-		if err := vesselRunLifecycle(api); err != nil {
-			return err
-		}
+		err = vesselRunLifecycle(api)
 	case "observations-completion":
-		if err := observationsCompletion(api); err != nil {
-			return err
-		}
+		err = observationsCompletion(api)
+	case "run-cleanup":
+		err = runCleanup(api, dataDir)
 	default:
+		server.Close()
 		return fmt.Errorf("unknown workflow check %q", name)
+	}
+	if err != nil {
+		server.Close()
+		return err
+	}
+	server.Close()
+
+	// Reopen the persisted snapshot the way the real service does on restart.
+	// List and detail reads after restart must match the last successful writes.
+	reopened, err := storage.Open(dataDir)
+	if err != nil {
+		return fmt.Errorf("reopen persisted state: %w", err)
+	}
+	recovered := service.New(reopened, clock.System{})
+	switch name {
+	case "vessel-run-lifecycle":
+		err = verifyLifecycleRecovery(recovered)
+	case "observations-completion":
+		err = verifyCompletionRecovery(recovered)
+	case "run-cleanup":
+		err = verifyCleanupRecovery(recovered)
+	}
+	if err != nil {
+		return err
 	}
 	fmt.Printf("workflow check passed: %s\n", name)
 	return nil
